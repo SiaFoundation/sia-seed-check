@@ -16,18 +16,12 @@ jobs:
       matrix:
         go-arch: [amd64, arm64]
     env:
-      RELEASE_NAME: ${{ inputs.project }}_linux_${{ matrix.go-arch }}
+      RELEASE_NAME: sia-seed-check_linux_${{ matrix.go-arch }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-      - name: Setup CGO
-        if: ${{ inputs.cgo-enabled }}
-        run: |
-          if [ ${{ matrix.go-arch }} == "arm64" ]; then
-            sudo apt update
-            sudo apt install -y gcc-aarch64-linux-gnu
-            echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          fi
+        with:
+          go-version: 1.25
       - name: Build
         run: |
           # generate and download packages
@@ -35,7 +29,7 @@ jobs:
           go generate ./...
 
           # build binaries
-          GOARCH=${{matrix.go-arch}} go build -o bin/ ${{ inputs.linux-build-args }} ./...
+          GOARCH=${{matrix.go-arch}} go build -o bin/ -trimpath -a -ldflags '-s -w' ./...
 
           # package
           mkdir -p release
@@ -54,10 +48,12 @@ jobs:
       matrix:
         go-arch: [amd64, arm64]
     env:
-      RELEASE_NAME: ${{ inputs.project }}_darwin_${{ matrix.go-arch }}
+      RELEASE_NAME: sia-seed-check_darwin_${{ matrix.go-arch }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
       - name: Setup
         env:
           APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
@@ -106,7 +102,7 @@ jobs:
           go generate ./...
 
           # build binaries
-          GOARCH=${{matrix.go-arch}} go build -o bin/ ${{ inputs.macos-build-args }} ./...
+          GOARCH=${{matrix.go-arch}} go build -o bin/ -trimpath -a -ldflags '-s -w' ./...
 
           # sign built binaries
           for file in bin/*; do
@@ -134,13 +130,15 @@ jobs:
       matrix:
         go-arch: [amd64] #, arm64]
     env:
-      RELEASE_NAME: ${{ inputs.project }}_windows_${{ matrix.go-arch }}
+      RELEASE_NAME: sia-seed-check_windows_${{ matrix.go-arch }}
     steps:
       - name: Configure Git # required for golangci-lint on Windows
         shell: bash
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10"
@@ -159,7 +157,7 @@ jobs:
           go generate ./...
 
           # build binaries
-          GOARCH=${{matrix.go-arch}} go build -o bin/ ${{ inputs.windows-build-args }} ./...
+          GOARCH=${{matrix.go-arch}} go build -o bin/ -trimpath -a -ldflags '-s -w' ./...
 
           # sign built binaries
           for file in bin/*; do
