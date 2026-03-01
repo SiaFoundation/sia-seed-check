@@ -31,7 +31,7 @@ func matchingAddr(addr types.Address, seed *[32]byte, i uint64) bool {
 	return false
 }
 
-func runCheckAddr() {
+func runCheckAddr(start uint64) {
 	s := bufio.NewScanner(os.Stdin)
 	os.Stdout.WriteString("Enter address: ")
 	s.Scan()
@@ -47,9 +47,10 @@ func runCheckAddr() {
 		fatalf("invalid seed: %v", err)
 	}
 
-	printlnf("Starting Search...")
+	printlnf("Starting Search at index %d...", start)
 	printlnf("Press Ctrl+C to stop searching at any time.")
-	for i := uint64(0); i <= 1e5; i++ {
+	i := start
+	for ; i <= 1e5; i++ {
 		if i%1000 == 0 {
 			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
 		}
@@ -63,7 +64,7 @@ Address not found in first 100000 indices.
 Search will continue, but the probability of finding a match is low.
 This address was likely not derived from the supplied seed.`)
 
-	for i := uint64(1e5); ; i++ {
+	for ; ; i++ {
 		if i%1000 == 0 {
 			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
 		}
@@ -73,7 +74,7 @@ This address was likely not derived from the supplied seed.`)
 	}
 }
 
-func runCheckPubKey() {
+func runCheckPubKey(start uint64) {
 	s := bufio.NewScanner(os.Stdin)
 	os.Stdout.WriteString("Enter public key: ")
 	s.Scan()
@@ -89,13 +90,14 @@ func runCheckPubKey() {
 		fatalf("invalid seed: %v", err)
 	}
 
-	printlnf("Starting Search...")
+	printlnf("Starting Search at index %d...", start)
 	printlnf("Press Ctrl+C to stop searching at any time.")
-	for i := uint64(0); i <= 1e5; i++ {
-		if i%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
-		} else if wallet.KeyFromSeed(&seed, i).PublicKey() == pk {
-			printlnf("\rPublic key found at index %v", i)
+
+	for ; start <= 1e5; start++ {
+		if start%1000 == 0 {
+			fmt.Fprintf(os.Stdout, "\rchecking index %d", start)
+		} else if wallet.KeyFromSeed(&seed, start).PublicKey() == pk {
+			printlnf("\rPublic key found at index %v", start)
 			return
 		}
 	}
@@ -105,30 +107,32 @@ Public key not found in first 100000 indices.
 Search will continue, but the probability of finding a match is low.
 This public key was likely not derived from the supplied seed.`)
 
-	for i := uint64(1e5); ; i++ {
-		if i%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
-		} else if wallet.KeyFromSeed(&seed, i).PublicKey() == pk {
-			printlnf("\rPublic key found at index %v", i)
+	for ; ; start++ {
+		if start%1000 == 0 {
+			fmt.Fprintf(os.Stdout, "\rchecking index %d", start)
+		} else if wallet.KeyFromSeed(&seed, start).PublicKey() == pk {
+			printlnf("\rPublic key found at index %v", start)
 			return
 		}
 	}
 }
 
 func main() {
+	var startIndex uint64
+	flag.Uint64Var(&startIndex, "start", 0, "index to start searching from")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
-		runCheckAddr()
+		runCheckAddr(startIndex)
 		return
 	}
 
 	cmd := flag.Arg(0)
 	switch cmd {
 	case "address":
-		runCheckAddr()
+		runCheckAddr(startIndex)
 	case "pubkey":
-		runCheckPubKey()
+		runCheckPubKey(startIndex)
 	default:
 		fatalf("Unknown command %q", cmd)
 	}
