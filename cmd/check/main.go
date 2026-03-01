@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"iter"
 	"os"
+	"strings"
 
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/wallet"
@@ -19,16 +21,42 @@ func fatalf(format string, a ...interface{}) {
 	os.Exit(1)
 }
 
-func matchingAddr(addr types.Address, seed *[32]byte, i uint64) bool {
-	pk := wallet.KeyFromSeed(seed, i)
-	if types.StandardUnlockHash(pk.PublicKey()) == addr {
-		printlnf("\rStandard unlock hash at index %v", i)
-		return true
-	} else if types.StandardAddress(pk.PublicKey()) == addr {
-		printlnf("\rStandard address at index %v", i)
-		return true
+func replacef(format string, a ...interface{}) {
+	fmt.Fprintf(os.Stdout, "\r\033[K"+format, a...)
+}
+
+func check(context string, start uint64) iter.Seq[uint64] {
+	const maxIndex = 1e5
+	return func(yield func(uint64) bool) {
+		printlnf("Starting Search at index %d...", start)
+		printlnf("Press Ctrl+C to stop searching at any time.")
+		current := start
+		for i := 0; i <= maxIndex; i++ {
+			// note: this loop is structured to allow for wrapping when
+			// checking high indices that could overflow.
+			if current%1000 == 0 {
+				replacef("Checking index %d", current)
+			}
+			if !yield(current) {
+				return
+			}
+			current++
+		}
+
+		printlnf(`
+%s not found in range %d-%d.
+Search will continue, but the probability of finding a match is low.
+This %s was likely not derived from the supplied seed.`, strings.ToUpper(context[:1])+context[1:], start, current, context)
+
+		for ; ; current++ {
+			if current%1000 == 0 {
+				replacef("Checking index %d", current)
+			}
+			if !yield(current) {
+				return
+			}
+		}
 	}
-	return false
 }
 
 func runCheckAddr(start uint64) {
@@ -47,28 +75,13 @@ func runCheckAddr(start uint64) {
 		fatalf("invalid seed: %v", err)
 	}
 
-	printlnf("Starting Search at index %d...", start)
-	printlnf("Press Ctrl+C to stop searching at any time.")
-	i := start
-	for ; i <= 1e5; i++ {
-		if i%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
-		}
-		if matchingAddr(addr, &seed, i) {
+	for i := range check("address", start) {
+		pk := wallet.KeyFromSeed(&seed, i)
+		if types.StandardUnlockHash(pk.PublicKey()) == addr {
+			replacef("Standard unlock hash at index %v\n", i)
 			return
-		}
-	}
-
-	printlnf(`
-Address not found in first 100000 indices.
-Search will continue, but the probability of finding a match is low.
-This address was likely not derived from the supplied seed.`)
-
-	for ; ; i++ {
-		if i%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", i)
-		}
-		if matchingAddr(addr, &seed, i) {
+		} else if types.StandardAddress(pk.PublicKey()) == addr {
+			replacef("Standard address at index %v\n", i)
 			return
 		}
 	}
@@ -90,28 +103,9 @@ func runCheckPubKey(start uint64) {
 		fatalf("invalid seed: %v", err)
 	}
 
-	printlnf("Starting Search at index %d...", start)
-	printlnf("Press Ctrl+C to stop searching at any time.")
-
-	for ; start <= 1e5; start++ {
-		if start%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", start)
-		} else if wallet.KeyFromSeed(&seed, start).PublicKey() == pk {
-			printlnf("\rPublic key found at index %v", start)
-			return
-		}
-	}
-
-	printlnf(`
-Public key not found in first 100000 indices.
-Search will continue, but the probability of finding a match is low.
-This public key was likely not derived from the supplied seed.`)
-
-	for ; ; start++ {
-		if start%1000 == 0 {
-			fmt.Fprintf(os.Stdout, "\rchecking index %d", start)
-		} else if wallet.KeyFromSeed(&seed, start).PublicKey() == pk {
-			printlnf("\rPublic key found at index %v", start)
+	for i := range check("public key", start) {
+		if wallet.KeyFromSeed(&seed, i).PublicKey() == pk {
+			replacef("Public key found at index %v\n", i)
 			return
 		}
 	}
